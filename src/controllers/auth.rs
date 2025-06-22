@@ -36,13 +36,24 @@ pub struct MagicLinkParams {
     pub email: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct LoginUser {
+    pub user: LoginParams,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RegisterUser {
+    pub user: RegisterParams,
+}
+
 /// Register function creates a new user with the given parameters and sends a
 /// welcome email to the user
 #[debug_handler]
 async fn register(
     State(ctx): State<AppContext>,
-    Json(params): Json<RegisterParams>,
+    Json(params): Json<RegisterUser>,
 ) -> Result<Response> {
+    let params: RegisterParams = params.user;
     let res = users::Model::create_with_password(&ctx.db, &params).await;
 
     let user = match res {
@@ -64,7 +75,12 @@ async fn register(
 
     AuthMailer::send_welcome(&ctx, &user).await?;
 
-    format::json(())
+    let jwt_secret = ctx.config.get_jwt_config()?;
+    let token = user
+        .generate_jwt(&jwt_secret.secret, jwt_secret.expiration)
+        .or_else(|_| unauthorized("unauthorized!"))?;
+
+    format::json(LoginResponse::new(&user, &token))
 }
 
 /// Verify register user. if the user not verified his email, he can't login to
@@ -128,7 +144,8 @@ async fn reset(State(ctx): State<AppContext>, Json(params): Json<ResetParams>) -
 
 /// Creates a user login and returns a token
 #[debug_handler]
-async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginParams>) -> Result<Response> {
+async fn login(State(ctx): State<AppContext>, Json(params): Json<LoginUser>) -> Result<Response> {
+    let params: LoginParams = params.user;
     let user = users::Model::find_by_email(&ctx.db, &params.email).await?;
 
     let valid = user.verify_password(&params.password);
@@ -216,13 +233,16 @@ async fn magic_link_verify(
 
 pub fn routes() -> Routes {
     Routes::new()
-        .prefix("/api/auth")
-        .add("/register", post(register))
-        .add("/verify/{token}", get(verify))
-        .add("/login", post(login))
-        .add("/forgot", post(forgot))
-        .add("/reset", post(reset))
-        .add("/current", get(current))
-        .add("/magic-link", post(magic_link))
-        .add("/magic-link/{token}", get(magic_link_verify))
+        .prefix("/api")
+        .add("/users", post(register))
+        .add("/users/login", post(login))
+
+        //.add("/auth/register", post(register))
+        .add("/auth/verify/{token}", get(verify))
+        //.add("/auth/login", post(login))
+        .add("/auth/forgot", post(forgot))
+        .add("/auth/reset", post(reset))
+        .add("/auth/current", get(current))
+        .add("/auth/magic-link", post(magic_link))
+        .add("/auth/magic-link/{token}", get(magic_link_verify))
 }

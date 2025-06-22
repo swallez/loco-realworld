@@ -4,22 +4,31 @@ use crate::models::_entities::users;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoginResponse {
-    pub token: String,
-    pub pid: String,
-    pub name: String,
-    pub is_verified: bool,
+    pub user: LoginUser,
 }
 
 impl LoginResponse {
     #[must_use]
     pub fn new(user: &users::Model, token: &String) -> Self {
         Self {
-            token: token.to_string(),
-            pid: user.pid.to_string(),
-            name: user.name.clone(),
-            is_verified: user.email_verified_at.is_some(),
+            user: LoginUser {
+                username: user.name.clone(),
+                email: user.email.clone(),
+                token: token.clone(),
+                image: "/assets/profile-default.png".to_string(),
+                bio: "No bio yet".to_string(),
+            }
         }
     }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct LoginUser {
+    pub username: String,
+    pub email: String,
+    pub token: String,
+    pub image: String,
+    pub bio: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

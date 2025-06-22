@@ -20,6 +20,7 @@ pub struct LoginParams {
 pub struct RegisterParams {
     pub email: String,
     pub password: String,
+    #[serde(rename = "username")]
     pub name: String,
 }
 
