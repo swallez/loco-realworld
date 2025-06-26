@@ -46,7 +46,7 @@ pub async fn init_user_login(request: &TestServer, ctx: &AppContext) -> LoggedIn
         user: users::Model::find_by_email(&ctx.db, USER_EMAIL)
             .await
             .unwrap(),
-        token: login_response.token,
+        token: login_response.user.token,
     }
 }
 

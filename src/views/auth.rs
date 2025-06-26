@@ -48,3 +48,20 @@ impl CurrentResponse {
         }
     }
 }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct UserProfile {
+    username: String,
+    bio: String,
+    image: String,
+}
+
+impl UserProfile {
+    pub fn new(user: users::Model) -> Self {
+        Self {
+            username: user.name,
+            bio: user.bio.unwrap_or("No bio yet".to_string()),
+            image: user.image.unwrap_or("/assets/profile-default.png".to_string()),
+        }
+    }
+}

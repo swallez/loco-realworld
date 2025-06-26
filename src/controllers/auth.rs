@@ -11,6 +11,8 @@ use loco_rs::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
+use serde_json::json;
+use crate::views::auth::UserProfile;
 
 pub static EMAIL_DOMAIN_RE: OnceLock<Regex> = OnceLock::new();
 
@@ -231,11 +233,27 @@ async fn magic_link_verify(
     format::json(LoginResponse::new(&user, &token))
 }
 
+async fn user_profile(
+    State(ctx): State<AppContext>,
+    Path(username): Path<String>,
+) -> Result<Response> {
+
+    let user = users::Entity::find()
+        .filter(users::Column::Name.eq(username)).one(&ctx.db).await?
+        .ok_or_else(|| ModelError::EntityNotFound)?;
+
+    format::json(json!({
+        "profile": UserProfile::new(user)
+    }))
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("/api")
         .add("/users", post(register))
         .add("/users/login", post(login))
+
+        .add("/profiles/{username}", get(user_profile))
 
         //.add("/auth/register", post(register))
         .add("/auth/verify/{token}", get(verify))
