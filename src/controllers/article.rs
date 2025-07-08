@@ -52,8 +52,10 @@ pub async fn update(
 }
 
 #[debug_handler]
-pub async fn remove(Path(id): Path<i32>, State(ctx): State<AppContext>) -> Result<Response> {
-    load_item(&ctx, id).await?.delete(&ctx.db).await?;
+pub async fn remove(Path(slug): Path<String>, State(ctx): State<AppContext>) -> Result<Response> {
+    articles::Entity::delete_many()
+        .filter(articles::Column::Slug.eq(slug))
+        .exec(&ctx.db).await?;
     format::empty()
 }
 
@@ -108,13 +110,14 @@ pub async fn list_recent(
     // Load articles, with a max limit of 100
     let limit = params.limit.unwrap_or(10).clamp(0, 100);
 
-    let articles = Entity::find().order_by_desc(articles::Column::CreatedAt)
+    let articles = Entity::find()
+        .order_by_desc(articles::Column::CreatedAt)
         .offset(params.offset)
         .limit(limit)
         .all(&ctx.db).await?;
 
-    // Fetch all distinct author names
-    let mut user_ids = articles.iter().map(|article| article.author_id).collect::<Vec<_>>();
+    // Load all distinct authors
+    let mut user_ids: Vec<_> = articles.iter().map(|article| article.author_id).collect();
     user_ids.sort();
     user_ids.dedup();
 
@@ -134,9 +137,10 @@ pub async fn list_recent(
         views.push(ArticleView::compact_from(article, author.clone()))
     }
 
-    // And produce the response
+    // Get total article count
     let total_count = articles::Entity::find().count(&ctx.db).await?;
 
+    // And produce the response
     let response = json!({
         "articles": views,
         "articlesCount": total_count,
@@ -161,12 +165,11 @@ pub struct NewArticleParams {
 
 pub async fn new_article(
     State(ctx): State<AppContext>,
-    auth: JWT,
+    auth: JWTWithUser<users::Model>,
     Json(new_article_request): Json<NewArticleRequest>,
 ) -> Result<Response> {
 
-
-    let author = users::Model::find_by_pid(&ctx.db, &auth.claims.pid).await?;
+    let author = auth.user;
 
     let tx = ctx.db.begin().await?;
 
@@ -175,16 +178,15 @@ pub async fn new_article(
 
     let slug = slug::slugify(&param.title);
 
-    let article = articles::Model {
-        author_id: author.id,
-        slug,
-        title: param.title,
-        description: param.description,
-        body: param.body,
+    let article = articles::ActiveModel {
+        author_id: ActiveValue::set(author.id),
+        slug: ActiveValue::set(slug),
+        title: ActiveValue::set(param.title),
+        description: ActiveValue::set(param.description),
+        body: ActiveValue::set(param.body),
         ..Default::default()
     };
 
-    let article = article.into_active_model();
     let err = article.insert(&tx).await;
     tx.commit().await?;
 
